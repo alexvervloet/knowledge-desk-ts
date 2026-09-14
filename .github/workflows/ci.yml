@@ -1,0 +1,140 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - run: npm ci
+
+      - name: Start pgvector (docker compose)
+        run: docker compose up -d db
+
+      - name: Wait for database
+        run: |
+          for i in $(seq 1 30); do
+            status=$(docker inspect -f '{{.State.Health.Status}}' knowledge-desk-ts-pg 2>/dev/null || echo none)
+            echo "health: $status"
+            [ "$status" = "healthy" ] && exit 0
+            sleep 2
+          done
+          echo "database never became healthy"; docker compose logs db; exit 1
+
+      - name: Migrate
+        run: npm run migrate
+
+      # The SPA build has to exist before the suite runs: tests/static-spa.test.ts
+      # skips itself without a frontend/dist, and a silently skipped test is the
+      # same shape of problem as the bug it covers.
+      - name: Build the frontend
+        run: npm ci && npm run build
+        working-directory: frontend
+
+      - name: Tests
+        run: npm run coverage
+
+      - name: Eval gate (permission leak, grounded answer, injection)
+        run: npm run evals
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history: the secret scan below reads every commit, so a
+          # credential added and reverted inside a branch is still caught.
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Lint
+        run: npm run lint
+      - name: Build
+        run: npm run build
+      - name: Scan for secrets
+        # A hard gate, unlike the dependency audit: a committed credential is not
+        # something to look at later.
+        env:
+          GITLEAKS_VERSION: "8.30.1"
+        run: |
+          curl -fsSL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+            | sudo tar -xz -C /usr/local/bin gitleaks
+          gitleaks git --redact --no-banner .
+      - name: Audit dependencies
+        # Advisory: a new advisory in a pinned dep should be visible without
+        # blocking unrelated work. Promote to a hard gate once the noise level is
+        # known.
+        continue-on-error: true
+        run: npm audit --audit-level=high
+
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+      - run: npm test
+      - name: Audit npm dependencies
+        continue-on-error: true # advisory, same reasoning as above
+        run: npm audit --audit-level=high
+
+  compose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build and start the full stack
+        run: docker compose up -d --build || (docker compose logs; exit 1)
+
+      - name: Wait for the API to be healthy
+        run: |
+          for i in $(seq 1 40); do
+            cid=$(docker compose ps -q api)
+            status=$(docker inspect -f '{{.State.Health.Status}}' "$cid" 2>/dev/null || echo none)
+            echo "api: $status"
+            [ "$status" = "healthy" ] && exit 0
+            sleep 3
+          done
+          docker compose logs; exit 1
+
+      - name: Smoke the running stack (seed, signup, ask)
+        run: |
+          curl -fsS localhost:8000/healthz; echo
+          docker compose exec -T api node dist/src/seed.js
+          token=$(curl -fsS -X POST localhost:8000/auth/signup \
+            -H 'Content-Type: application/json' \
+            -d '{"org_slug":"ci-demo","org_name":"CI","email":"ci@ci.test","password":"pw-supersecret"}' \
+            | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>console.log(JSON.parse(s).token))")
+          curl -fsS -X POST localhost:8000/ask \
+            -H "Authorization: Bearer $token" -H 'Content-Type: application/json' \
+            -d '{"question":"hello there"}'; echo
+          # The built SPA is served same-origin.
+          curl -fsS localhost:8000/ | grep -q "<div id=\"root\">" && echo "SPA served"
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v
