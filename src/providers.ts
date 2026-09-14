@@ -12,6 +12,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { randomBytes } from 'node:crypto'
 import { settings } from './config.ts'
+import { round6 } from './numbers.ts'
 import * as normalize from './normalize.ts'
 
 export const MOCK_BANNER = '[MOCK] no answer-model key set; this reply is not model-generated.'
@@ -255,24 +256,6 @@ export function cost(model: string, inputTokens: number, outputTokens: number): 
   }
   const [inRate, outRate] = rates
   return round6((inputTokens / 1e6) * inRate + (outputTokens / 1e6) * outRate)
-}
-
-/**
- * Python's `round(x, 6)`, which is banker's rounding on a half.
- *
- * `toFixed` rounds half away from zero, so a cost landing exactly on a half at
- * the sixth decimal would differ from the Python side by one unit in the last
- * place. These numbers are summed into a budget, so the difference accumulates.
- */
-function round6(value: number): number {
-  const scaled = value * 1e6
-  const floor = Math.floor(scaled)
-  const diff = scaled - floor
-  let rounded: number
-  if (diff > 0.5) rounded = floor + 1
-  else if (diff < 0.5) rounded = floor
-  else rounded = floor % 2 === 0 ? floor : floor + 1
-  return rounded / 1e6
 }
 
 /**

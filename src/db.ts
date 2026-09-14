@@ -45,6 +45,18 @@ export interface Conn {
   require<T extends Row = Row>(text: string, values?: unknown[]): Promise<T>
 }
 
+/**
+ * Whether an error is Postgres's unique-violation (SQLSTATE 23505).
+ *
+ * psycopg raises a distinct `psycopg.errors.UniqueViolation` class that callers
+ * catch by type. node-postgres raises one generic error carrying a `code`, so the
+ * type test becomes a code test, named once here rather than spelled out at each
+ * of the four call sites that need it.
+ */
+export function isUniqueViolation(err: unknown): boolean {
+  return typeof err === 'object' && err !== null && 'code' in err && err.code === '23505'
+}
+
 let pool: pg.Pool | null = null
 
 /**
