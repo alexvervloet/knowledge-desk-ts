@@ -206,7 +206,7 @@ export function defuse(text: string): [string, number] {
 }
 
 /** Defuse marker- and grammar-shaped text inside a document. */
-function neutralize(text: string): string {
+export function neutralize(text: string): string {
   return defuse(text)[0]
 }
 
