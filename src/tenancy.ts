@@ -290,7 +290,12 @@ export class TenantScope {
    * Conservative on updates: an edit counts toward the incoming total, which can
    * only over-protect.
    */
-  syncSource(source: string, items: UploadItem[]): Promise<SyncResult> {
+  async syncSource(source: string, items: UploadItem[]): Promise<SyncResult> {
+    // `async`, like every other gated method here, and not for style. A
+    // non-async method that calls requireRole first throws *before* it returns a
+    // promise, so a caller reaching for `.catch()` never sees it and the failure
+    // surfaces somewhere else entirely. Returning a rejected promise is the
+    // contract the signature already claims.
     this.requireRole('admin')
     const incomingBytes = items.reduce((n, i) => n + Buffer.byteLength(i.content, 'utf8'), 0)
 
@@ -319,7 +324,7 @@ export class TenantScope {
       }
     }
 
-    return syncDocuments(this.orgId, source, items, checkCaps)
+    return await syncDocuments(this.orgId, source, items, checkCaps)
   }
 
   /**
@@ -634,10 +639,10 @@ export class TenantScope {
     return Number(row.n)
   }
 
-  /** Recent audit events for this org. Admin only. */
-  listAudit(limit = 100, offset = 0): Promise<Row[]> {
+  /** Recent audit events for this org. Admin only. See syncSource on the `async`. */
+  async listAudit(limit = 100, offset = 0): Promise<Row[]> {
     this.requireRole('admin')
-    return connect(this.orgId, (conn) =>
+    return await connect(this.orgId, (conn) =>
       conn.query(
         'select a.action, a.detail, a.created_at, u.email as actor' +
           ' from audit_log a left join users u on u.id = a.actor_user_id' +
