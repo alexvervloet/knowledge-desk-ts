@@ -159,7 +159,25 @@ reads `c.text`, and a row that arrives without one is a bug at a single boundary
 rather than eight silent empty strings further in. The Python version has the same
 shape of problem and no type checker to point at it.
 
-## 10. A rebase to reword a commit deleted the commit
+## 10. `for await ... of` closes the generator on `break`; Python's `for` does not
+
+The assistant is an async generator, and its `finally` block is what books the
+tokens an abandoned stream already spent. Two tests exist to prove that: consume
+one token, walk away, check the row was billed.
+
+Written the way the Python tests are written — loop, `break`, then close — they
+both passed, and one of them passed for entirely the wrong reason. Breaking out of
+a `for await ... of` loop calls `return()` on the iterator automatically, so the
+generator was closed and billed at the `break`. The later line that meant to close
+it was a no-op, and the test that installs a priced estimate *after* the break was
+installing it after the only call that would have used it. It asserted a spend of
+0.25 and got 0.
+
+Both tests now hold the iterator and call `next()` by hand. The lesson generalises
+past these two: any test that wants to control *when* a generator closes cannot
+use `for await ... of` to read from it.
+
+## 11. A rebase to reword a commit deleted the commit
 
 Backticks in a `git commit -m "..."` string are shell-executed, so
 ``rather than `as number` on`` became `rather than  on` and two words were eaten
