@@ -1,0 +1,30 @@
+-- Remove the HNSW index added in 0010. It is not a win under this system's
+-- security model, and it is expensive, so keeping it would be cargo cult.
+--
+-- Measured on 100k chunks, 1024-dim, this laptop:
+--
+--   no index,   RLS on   p50  569ms  p95 2272ms   seq scan
+--   HNSW index, RLS on   p50  575ms  p95  595ms   seq scan, INDEX NOT USED
+--   HNSW index, RLS off  p50  367ms  p95  392ms   index scan
+--
+-- The middle row is the one that matters: with row-level security enforced, the
+-- planner does not use the index for our access-scoped query at all. The same
+-- query, same data, same session settings, run as a role that bypasses RLS,
+-- does use it. (Marking pgvector's cosine_distance LEAKPROOF was tested as a
+-- fix and did not change the plan, so the usual security-barrier explanation is
+-- not the whole story.)
+--
+-- Meanwhile the index is not free: bulk loading 100k chunks took 28 seconds
+-- with no index versus 355 seconds to rebuild it afterwards, and every ongoing
+-- insert pays a graph insertion. So under RLS the index buys nothing on reads
+-- and costs an order of magnitude on writes.
+--
+-- The tradeoff we are choosing, deliberately: keep row-level security, which is
+-- the third and last line of defense against cross-tenant leakage, and accept a
+-- sequential scan on retrieval. Tenant corpora here are small (a scan of one
+-- org's chunks, not the whole table). If a deployment ever outgrows that, the
+-- escape hatch is documented in docs/WALKTHROUGH.md: drop the RLS policy on chunks
+-- and re-create this index, accepting that isolation then rests on the data
+-- layer and the ACL-filtered query alone.
+
+drop index if exists chunks_embedding_hnsw;
