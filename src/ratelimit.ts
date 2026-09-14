@@ -10,18 +10,24 @@
 
 import { settings } from './config.ts'
 
-// A bucket refills to full after burst/rate minutes of silence, at which point it
-// is indistinguishable from a key that has never been seen. Holding it after that
-// is pure leak: one entry per user id, or per client address, kept for the life of
-// the process.
-const EVICT_AFTER_SECONDS = 3600.0
-
 /** Seconds, monotonic. `performance.now()` is milliseconds and never goes backwards. */
 const monotonic = (): number => performance.now() / 1000
 
 export class TokenBucketLimiter {
+  // A bucket refills to full after burst/rate minutes of silence, at which point
+  // it is indistinguishable from a key that has never been seen. Holding it after
+  // that is pure leak: one entry per user id, or per client address, kept for the
+  // life of the process. Public so the eviction test can name the same number
+  // rather than restate it.
+  static readonly EVICT_AFTER_SECONDS = 3600.0
+
   private readonly clock: () => number
   private buckets = new Map<string, [tokens: number, lastTs: number]>()
+
+  /** How many buckets are held. Exposed for the eviction test. */
+  get size(): number {
+    return this.buckets.size
+  }
 
   constructor(clock: () => number = monotonic) {
     this.clock = clock
@@ -32,7 +38,7 @@ export class TokenBucketLimiter {
   }
 
   private evictIdle(now: number): void {
-    const cutoff = now - EVICT_AFTER_SECONDS
+    const cutoff = now - TokenBucketLimiter.EVICT_AFTER_SECONDS
     for (const [key, [, last]] of this.buckets) {
       if (last < cutoff) this.buckets.delete(key)
     }
