@@ -100,7 +100,7 @@ export function init(): void {
       flush = async () => {
         await processor.forceFlush()
       }
-      setStartObservation(tracing.startObservation as unknown as StartObservation)
+      setStartObservation(tracing.startObservation)
       console.info('langfuse: tracing enabled')
     } catch (err) {
       console.error('langfuse: init failed, tracing disabled', err)

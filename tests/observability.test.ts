@@ -113,12 +113,11 @@ describe('the active path', () => {
     expect(r.name).toBe('ask')
     expect((r.attributes.metadata as Record<string, unknown>).org_id).toBe('org-1')
     const [retrieval, generation] = r.children // retriever then generation
+    expect(retrieval).toBeDefined()
     expect(retrieval?.asType).toBe('retriever')
     expect(retrieval?.ended).toBe(true)
-    expect((retrieval?.updates[0]?.output as Record<string, unknown>).acl).toEqual({
-      orgChunks: 5,
-      allowedChunks: 2,
-    })
+    const aclOutput = retrieval?.updates[0]?.output as { acl: unknown }
+    expect(aclOutput.acl).toEqual({ orgChunks: 5, allowedChunks: 2 })
     expect(generation?.asType).toBe('generation')
     expect(generation?.updates[0]?.usageDetails).toEqual({ input: 100, output: 20 })
     expect(generation?.updates[0]?.costDetails).toEqual({ total: 0.0012 })
