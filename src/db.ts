@@ -47,25 +47,41 @@ export interface Conn {
 
 let pool: pg.Pool | null = null
 
+/**
+ * Clients that have had their per-connection setup run.
+ *
+ * psycopg's pool takes a `configure` callback and waits for it before handing
+ * the connection out. node-postgres has no such hook: its `connect` event fires
+ * with no way to make the pool wait, so setup kicked off there races the first
+ * real query on that client, and pgvector's type registration losing that race
+ * means a vector column comes back as a string. Tracking configured clients here
+ * and awaiting the setup on first checkout is what psycopg was doing for free.
+ *
+ * Weak so a discarded client does not keep an entry alive.
+ */
+const configured = new WeakSet<pg.PoolClient>()
+
+async function configure(client: pg.PoolClient): Promise<void> {
+  if (configured.has(client)) return
+  await pgvector.registerTypes(client)
+  // Iterative scan makes the HNSW index safe under our ACL filter. Without it
+  // the index returns k candidates, the permission filter removes most of them,
+  // and the caller silently gets fewer results than they asked for. Relaxed
+  // order lets pgvector re-probe until enough rows survive the filter.
+  //
+  // Session-scoped on purpose, unlike the tenant GUC: this setting is identical
+  // for every tenant, so a pooled connection carrying it between requests is
+  // correct rather than a leak.
+  await client.query('set hnsw.iterative_scan = relaxed_order')
+  configured.add(client)
+}
+
 export function getPool(): pg.Pool {
   if (pool === null) {
     pool = new pg.Pool({
       connectionString: settings.appDatabaseUrl,
       min: settings.dbPoolMin,
       max: settings.dbPoolMax,
-    })
-    // Run once per physical connection, not per checkout.
-    pool.on('connect', (client) => {
-      void pgvector.registerTypes(client)
-      // Iterative scan makes the HNSW index safe under our ACL filter. Without it
-      // the index returns k candidates, the permission filter removes most of them,
-      // and the caller silently gets fewer results than they asked for. Relaxed
-      // order lets pgvector re-probe until enough rows survive the filter.
-      //
-      // Session-scoped on purpose, unlike the tenant GUC: this setting is identical
-      // for every tenant, so a pooled connection carrying it between requests is
-      // correct rather than a leak.
-      void client.query('set hnsw.iterative_scan = relaxed_order')
     })
     // A pooled client can be killed server-side between checkouts. Without a
     // listener node-postgres turns that into an unhandled 'error' event and takes
@@ -123,6 +139,7 @@ export async function connect<T>(
 ): Promise<T> {
   const client = await getPool().connect()
   try {
+    await configure(client)
     await client.query('begin')
     if (orgId !== null) {
       await client.query('select set_config($1, $2, true)', ['app.current_org', orgId])
