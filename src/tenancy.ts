@@ -17,6 +17,39 @@ import { Conflict, Forbidden, NotFound, QuotaExceeded } from './errors.ts'
 import { round6 } from './numbers.ts'
 import { syncDocuments, type UploadItem } from './ingest.ts'
 
+// Rows per round trip when sweeping a listing for the export. Not the API's page
+// cap, which bounds what a client may ask for; this is an internal loop, so the
+// number only trades round trips against peak memory.
+export const SWEEP_PAGE = 500
+
+/**
+ * Collect every row of a paginated listing.
+ *
+ * export() used to call the list methods with no arguments and inherit whatever
+ * their limit defaulted to. That was fine until pagination landed and the default
+ * became 100, at which point a tenant's export silently stopped at 100 members
+ * and 100 documents: well-formed JSON, quietly incomplete, which is the worst way
+ * for a data-export to fail. Paging explicitly here means the listing defaults
+ * can move again without taking the export with them.
+ *
+ * A standalone function rather than a method, because the loop has one property
+ * worth testing on its own — that it terminates on a row count which is an exact
+ * multiple of the page size, rather than dropping the final page or spinning
+ * forever — and testing that through a tenant with 500 documents would be slow
+ * enough that nobody would run it.
+ */
+export async function sweepPages<T>(
+  fetch: (limit: number, offset: number) => Promise<T[]>,
+  pageSize: number = SWEEP_PAGE,
+): Promise<T[]> {
+  const rows: T[] = []
+  for (;;) {
+    const page = await fetch(pageSize, rows.length)
+    rows.push(...page)
+    if (page.length < pageSize) return rows
+  }
+}
+
 /** Who is acting, and in which org. Built from a resolved session. */
 export interface AuthContext {
   readonly userId: string
@@ -399,28 +432,12 @@ export class TenantScope {
     }
   }
 
-  // Rows per round trip when sweeping a listing for the export. Not the API's
-  // page cap, which bounds what a client may ask for; this is an internal loop,
-  // so the number only trades round trips against peak memory.
-  private static readonly SWEEP_PAGE = 500
-
   /**
-   * Collect every row of a paginated listing.
-   *
-   * export() used to call the list methods with no arguments and inherit
-   * whatever their limit defaulted to. That was fine until pagination landed and
-   * the default became 100, at which point a tenant's export silently stopped at
-   * 100 members and 100 documents: well-formed JSON, quietly incomplete, which
-   * is the worst way for a data-export to fail. Paging explicitly here means the
-   * listing defaults can move again without taking the export with them.
+   * A portable snapshot of the org's members and documents. See `sweepPages` for
+   * why the listings are paged explicitly rather than called bare.
    */
-  private async sweep(fetch: (limit: number, offset: number) => Promise<Row[]>): Promise<Row[]> {
-    const rows: Row[] = []
-    for (;;) {
-      const page = await fetch(TenantScope.SWEEP_PAGE, rows.length)
-      rows.push(...page)
-      if (page.length < TenantScope.SWEEP_PAGE) return rows
-    }
+  private sweep(fetch: (limit: number, offset: number) => Promise<Row[]>): Promise<Row[]> {
+    return sweepPages(fetch)
   }
 
   // --- retrieval --------------------------------------------------------
