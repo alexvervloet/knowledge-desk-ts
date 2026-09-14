@@ -3,6 +3,11 @@ import { defineConfig } from 'vitest/config'
 export default defineConfig({
   test: {
     include: ['tests/**/*.test.ts'],
+    // The real-provider test is opt-in: `npm run test:real`. Several tests here
+    // assert mock-provider behaviour and fail when a key is present, so a suite
+    // that ran both would be one you could not run with a key in the environment
+    // — which is exactly how a refusing model went unnoticed in the first place.
+    exclude: ['tests/real-provider.test.ts', 'node_modules/**'],
     // Every database test truncates the same tables. Running files in parallel
     // would have them truncate each other's rows mid-test, so the suite is
     // serial. The Python side gets this for free from pytest's default.
