@@ -182,6 +182,9 @@ export function isInvisible(ch: string): boolean {
 
 /** The code points of `text`, which is what every index below is an index into. */
 export function codePoints(text: string): string[] {
+  // Spreading a string yields code points, which is exactly what is wanted here
+  // and what the rest of this module is built on.
+  // oxlint-disable-next-line no-misused-spread
   return [...text]
 }
 
@@ -197,8 +200,7 @@ export function fold(text: string): [string, number[]] {
   const out: string[] = []
   const origin: number[] = []
   const chars = codePoints(text)
-  for (let i = 0; i < chars.length; i++) {
-    const ch = chars[i] as string
+  for (const [i, ch] of chars.entries()) {
     if (isInvisible(ch)) continue
     out.push(LOOKALIKES.get(ch) ?? ch)
     origin.push(i)
@@ -223,8 +225,11 @@ export function originalSpan(
   length: number,
 ): [number, number] {
   if (start >= origin.length) return [length, length]
-  const first = origin[start] as number
-  const last = (0 < end && end <= origin.length ? origin[end - 1] : origin[origin.length - 1]) as number
+  const first = origin[start]
+  const last = 0 < end && end <= origin.length ? origin[end - 1] : origin.at(-1)
+  // start < origin.length was just checked, and `last` falls back to the final
+  // entry of a non-empty array, so neither can be missing.
+  if (first === undefined || last === undefined) return [length, length]
   return [first, last + 1]
 }
 
@@ -245,7 +250,7 @@ export function foldedIndices(folded: string, utf16Start: number, utf16End: numb
     if (i === utf16Start) start = cp
     if (i === utf16End) end = cp
     if (i === folded.length) break
-    i += (folded.codePointAt(i) as number) > 0xffff ? 2 : 1
+    i += (folded.codePointAt(i) ?? 0) > 0xffff ? 2 : 1
     cp += 1
   }
   return [start < 0 ? cp : start, end < 0 ? cp : end]

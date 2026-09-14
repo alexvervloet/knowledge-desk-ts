@@ -195,7 +195,7 @@ function build(): SettingsData {
   return s
 }
 
-export const settings: Settings = Object.defineProperty(build() as Settings, 'provider', {
+export const settings: Settings = Object.defineProperty(build(), 'provider', {
   // A getter rather than a field, because it is derived from two other fields a
   // test may reassign at any point. A value computed once at import would go
   // stale the moment a test set a key, and would then report "mock" while the

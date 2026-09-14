@@ -19,6 +19,8 @@
  */
 
 import cors from '@fastify/cors'
+import { stat } from 'node:fs/promises'
+import { resolve } from 'node:path'
 import Fastify, { type FastifyInstance } from 'fastify'
 import * as accounts from './accounts.ts'
 import * as assistant from './assistant.ts'
@@ -442,10 +444,9 @@ export async function buildApp(): Promise<FastifyInstance> {
   // through to the built frontend. Off unless SERVE_STATIC=1 and the build
   // exists, so dev and tests do not depend on a compiled UI.
   if (settings.serveStatic) {
-    const { existsSync } = await import('node:fs')
-    if (existsSync(settings.staticDir)) {
+    const built = await stat(settings.staticDir).catch(() => null)
+    if (built?.isDirectory()) {
       const fastifyStatic = (await import('@fastify/static')).default
-      const { resolve } = await import('node:path')
       await app.register(fastifyStatic, { root: resolve(settings.staticDir) })
       app.setNotFoundHandler(async (request, reply) => {
         // An unmatched API path is still a 404; anything else is a client route

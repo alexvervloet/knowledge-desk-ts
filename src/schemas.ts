@@ -38,7 +38,10 @@ const DocumentPath = z
   .min(1)
   .max(1024)
   .refine(
-    (value) => ![...value].some((ch) => ch < ' ' || ch === '\x7f' || normalize.isInvisible(ch)),
+    (value) =>
+      !normalize
+        .codePoints(value)
+        .some((ch) => ch < ' ' || ch === '\x7f' || normalize.isInvisible(ch)),
     { message: 'must not contain control or invisible characters' },
   )
 

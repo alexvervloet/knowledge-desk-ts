@@ -15,7 +15,6 @@
 import { randomBytes } from 'node:crypto'
 import * as audit from './audit.ts'
 import { settings } from './config.ts'
-import type { Row } from './db.ts'
 import * as outputchecks from './outputchecks.ts'
 import { countDefused, getAnswerProvider, type Context } from './providers.ts'
 import * as retrieval from './retrieval.ts'
@@ -100,7 +99,7 @@ export async function* answerStream(
       return
     }
 
-    contexts = (await retrieval.search(scope, question, k)) as Row[] as Context[]
+    contexts = await retrieval.search(scope, question, k)
     const refused = contexts.length === 0
     answerId = await scope.recordAnswer(question, provider.name, refused)
     await audit.log(scope.orgId, scope.ctx.userId, 'question.asked', {
@@ -138,7 +137,7 @@ export async function* answerStream(
     const sources: Source[] = contexts.map((c) => ({
       document_id: String(c.document_id),
       ordinal: Number(c.ordinal),
-      path: String(c.path ?? ''),
+      path: c.path,
     }))
     tracer.sources(sources, tracer.active ? await scope.retrievalStats() : null)
     yield { type: 'sources', sources }
@@ -214,6 +213,6 @@ export async function* answerStream(
         true,
       )
     }
-    await tracer.finish(traceError)
+    tracer.finish(traceError)
   }
 }

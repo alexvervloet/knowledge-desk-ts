@@ -90,7 +90,7 @@ const MD_LINK = /(?<!!)\[[^\]]*\]\(\s*([^)\s]+)/gu
 
 function findAll(pattern: RegExp, text: string): string[] {
   pattern.lastIndex = 0
-  return [...text.matchAll(pattern)].map((m) => m[1] as string)
+  return [...text.matchAll(pattern)].map((m) => m[1] ?? '')
 }
 
 /**
@@ -129,7 +129,7 @@ export function checkAnswer(answer: string, contexts: Context[]): Finding[] {
   // entailment: a quote can be real, in the right passage, and still not support
   // the sentence built around it. That needs task-specific factuality work, and
   // nothing here should be read as standing in for it.
-  const passages = contexts.map((c) => comparable(String(c.text ?? '')))
+  const passages = contexts.map((c) => comparable(c.text))
   const quoted = new Set<number>()
   const unsupported: string[] = []
   CITED_QUOTE.lastIndex = 0
@@ -137,7 +137,9 @@ export function checkAnswer(answer: string, contexts: Context[]): Finding[] {
     const n = Number(match[1])
     quoted.add(n)
     if (!allowed.has(n)) continue // already reported as out of range
-    if (!(passages[n - 1] as string).includes(comparable(match[2] as string))) {
+    // allowed.has(n) puts n in 1..contexts.length, so the passage is there.
+    const passage = passages[n - 1]
+    if (passage !== undefined && !passage.includes(comparable(match[2] ?? ''))) {
       unsupported.push(`[${n}]`)
     }
   }

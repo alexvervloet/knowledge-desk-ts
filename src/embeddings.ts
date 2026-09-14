@@ -50,6 +50,17 @@ class MersenneTwister {
   private mt = new Uint32Array(624)
   private index = 625
 
+  /**
+   * One word of state.
+   *
+   * Every read here is in bounds by construction, but noUncheckedIndexedAccess
+   * types a typed-array read as possibly undefined and has no way to know that.
+   * A fallback of 0 says the same thing an assertion would and stays checkable.
+   */
+  private at(i: number): number {
+    return this.mt[i] ?? 0
+  }
+
   constructor(seed: bigint) {
     // CPython's init_by_array over the seed's 32-bit little-endian words.
     this.initGenrand(19650218)
@@ -64,26 +75,26 @@ class MersenneTwister {
     let j = 0
     let k = Math.max(624, key.length)
     for (; k > 0; k--) {
-      const prev = this.mt[i - 1] as number
-      const mixed = (BigInt(this.mt[i] as number) ^
+      const prev = this.at(i - 1)
+      const mixed = (BigInt(this.at(i)) ^
         ((BigInt(prev) ^ (BigInt(prev) >> 30n)) * 1664525n)) & 0xffffffffn
-      this.mt[i] = Number((mixed + BigInt(key[j] as number) + BigInt(j)) & 0xffffffffn)
+      this.mt[i] = Number((mixed + BigInt(key[j] ?? 0) + BigInt(j)) & 0xffffffffn)
       i++
       j++
       if (i >= 624) {
-        this.mt[0] = this.mt[623] as number
+        this.mt[0] = this.at(623)
         i = 1
       }
       if (j >= key.length) j = 0
     }
     for (k = 623; k > 0; k--) {
-      const prev = this.mt[i - 1] as number
-      const mixed = (BigInt(this.mt[i] as number) ^
+      const prev = this.at(i - 1)
+      const mixed = (BigInt(this.at(i)) ^
         ((BigInt(prev) ^ (BigInt(prev) >> 30n)) * 1566083941n)) & 0xffffffffn
       this.mt[i] = Number((mixed - BigInt(i)) & 0xffffffffn)
       i++
       if (i >= 624) {
-        this.mt[0] = this.mt[623] as number
+        this.mt[0] = this.at(623)
         i = 1
       }
     }
@@ -94,7 +105,7 @@ class MersenneTwister {
   private initGenrand(seed: number): void {
     this.mt[0] = seed >>> 0
     for (let i = 1; i < 624; i++) {
-      const prev = this.mt[i - 1] as number
+      const prev = this.at(i - 1)
       const mixed = (BigInt(1812433253) * (BigInt(prev) ^ (BigInt(prev) >> 30n)) + BigInt(i)) &
         0xffffffffn
       this.mt[i] = Number(mixed)
@@ -107,8 +118,8 @@ class MersenneTwister {
     const UPPER = 0x80000000
     const LOWER = 0x7fffffff
     for (let i = 0; i < 624; i++) {
-      const y = (((this.mt[i] as number) & UPPER) | ((this.mt[(i + 1) % 624] as number) & LOWER)) >>> 0
-      let next = ((this.mt[(i + 397) % 624] as number) ^ (y >>> 1)) >>> 0
+      const y = ((this.at(i) & UPPER) | (this.at((i + 1) % 624) & LOWER)) >>> 0
+      let next = (this.at((i + 397) % 624) ^ (y >>> 1)) >>> 0
       if (y % 2 !== 0) next = (next ^ MATRIX_A) >>> 0
       this.mt[i] = next
     }
@@ -118,7 +129,7 @@ class MersenneTwister {
   /** One 32-bit output, tempered. */
   private genrandUint32(): number {
     if (this.index >= 624) this.generate()
-    let y = this.mt[this.index++] as number
+    let y = this.at(this.index++)
     y = (y ^ (y >>> 11)) >>> 0
     y = (y ^ ((y << 7) & 0x9d2c5680)) >>> 0
     y = (y ^ ((y << 15) & 0xefc60000)) >>> 0
@@ -166,8 +177,32 @@ export class MockEmbedder implements Embedder {
   }
 }
 
-interface VoyageResponse {
-  data: Array<{ embedding: number[]; index: number }>
+interface VoyageRow {
+  embedding: number[]
+  index: number
+}
+
+/**
+ * Check the response really is what the API documents before trusting it.
+ *
+ * An assertion would compile just as well and would turn a changed response, or
+ * an error body served with a 200, into `undefined.map is not a function` three
+ * frames away in the worker. Here it is a message naming the endpoint.
+ */
+function voyageRows(payload: unknown): VoyageRow[] {
+  const data: unknown =
+    typeof payload === 'object' && payload !== null ? Reflect.get(payload, 'data') : undefined
+  if (!Array.isArray(data)) throw new Error('voyage embeddings: response had no data array')
+  return data.map((row: unknown) => {
+    const embedding: unknown =
+      typeof row === 'object' && row !== null ? Reflect.get(row, 'embedding') : undefined
+    const index: unknown =
+      typeof row === 'object' && row !== null ? Reflect.get(row, 'index') : undefined
+    if (!Array.isArray(embedding) || typeof index !== 'number') {
+      throw new Error('voyage embeddings: a row was not {embedding, index}')
+    }
+    return { embedding: embedding.map(Number), index }
+  })
 }
 
 export class VoyageEmbedder implements Embedder {
@@ -196,15 +231,14 @@ export class VoyageEmbedder implements Embedder {
       const body = await response.text()
       throw new Error(`voyage embeddings failed: ${response.status} ${body.slice(0, 200)}`)
     }
-    const payload = (await response.json()) as VoyageResponse
     // The API does not promise the results come back in request order, and a
     // mismatch here would attach every chunk's vector to the wrong chunk: a
     // silent, total retrieval failure with nothing to see in the logs.
-    const ordered = [...payload.data].sort((a, b) => a.index - b.index)
+    const ordered = voyageRows(await response.json()).sort((a, b) => a.index - b.index)
     if (ordered.length !== texts.length) {
       throw new Error(`voyage returned ${ordered.length} embeddings for ${texts.length} inputs`)
     }
-    return ordered.map((row) => row.embedding.map(Number))
+    return ordered.map((row) => row.embedding)
   }
 
   embedDocuments(texts: string[]): Promise<number[][]> {

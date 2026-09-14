@@ -137,6 +137,29 @@ export async function parse<T>(
   return result.data
 }
 
+/**
+ * Read one field off a value of unknown shape.
+ *
+ * Fastify's error handler types its argument as unknown, and the two fields this
+ * module wants off it are conventions rather than a contract. Reflect.get reads
+ * them without asserting the whole object into a shape it was never checked to
+ * have.
+ */
+function field(value: unknown, key: string): unknown {
+  if (typeof value !== 'object' || value === null) return undefined
+  return Reflect.get(value, key)
+}
+
+function numberField(value: unknown, key: string): number | undefined {
+  const found = field(value, key)
+  return typeof found === 'number' ? found : undefined
+}
+
+function stringField(value: unknown, key: string): string | undefined {
+  const found = field(value, key)
+  return typeof found === 'string' ? found : undefined
+}
+
 function formatIssues(error: ZodError): string {
   return error.issues
     .map((i) => (i.path.length > 0 ? `${i.path.join('.')}: ${i.message}` : i.message))
@@ -152,9 +175,9 @@ export function registerErrorHandlers(app: FastifyInstance): void {
     }
     // Fastify's own errors carry a statusCode; anything else is a real 500 and
     // its message stays in the log rather than going to the caller.
-    const { statusCode, message } = error as { statusCode?: number; message?: string }
+    const statusCode = numberField(error, 'statusCode')
     if (statusCode !== undefined && statusCode < 500) {
-      await reply.code(statusCode).send({ detail: message ?? 'request failed' })
+      await reply.code(statusCode).send({ detail: stringField(error, 'message') ?? 'request failed' })
       return
     }
     request.log.error(error)

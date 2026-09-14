@@ -3,14 +3,16 @@
   "ignorePatterns": ["dist", "coverage", "frontend"],
   "plugins": ["typescript", "oxc", "import"],
   "categories": {
-    "correctness": "error",
-    "suspicious": "error"
+    "correctness": "error"
   },
   "rules": {
     "typescript/no-floating-promises": "error",
     "typescript/no-misused-promises": "error",
     "typescript/await-thenable": "error",
-    "typescript/no-explicit-any": "warn"
+    "typescript/no-unnecessary-type-assertion": "error",
+    "typescript/no-unnecessary-type-conversion": "error",
+    "typescript/no-base-to-string": "error",
+    "typescript/no-explicit-any": "error"
   },
   "overrides": [
     {

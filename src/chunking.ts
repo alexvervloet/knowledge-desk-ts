@@ -6,6 +6,7 @@
  */
 
 import { settings } from './config.ts'
+import { codePoints } from './normalize.ts'
 
 export function chunkText(text: string, size?: number, overlap?: number): string[] {
   const windowSize = size ?? settings.chunkSize
@@ -16,7 +17,7 @@ export function chunkText(text: string, size?: number, overlap?: number): string
   // Python indexes strings by code point, not UTF-16 unit. An emoji in a
   // document would otherwise be cut in half at a window boundary here and
   // produce a different chunking than the Python side for the same input.
-  const chars = [...text.trim()]
+  const chars = codePoints(text.trim())
   if (chars.length === 0) return []
 
   const step = windowSize - step0

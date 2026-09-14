@@ -103,7 +103,7 @@ export async function syncDocuments(
       // includes the hash so a re-upload of identical bytes is a no-op, and the
       // revision so that identical bytes uploaded *after* a deletion are not —
       // the chunks the earlier job produced are gone.
-      toEnqueue.push([String(doc.id), `${contentHash}:${doc.revision}`])
+      toEnqueue.push([doc.id, `${contentHash}:${doc.revision}`])
     }
 
     // Mark deletions: previously known paths no longer present.
@@ -234,16 +234,16 @@ export async function runPending(maxJobs = 1000): Promise<RunCounts> {
     const handler = DISPATCH[job.kind]
     try {
       if (handler === undefined) throw new Error(`no handler for job kind: ${job.kind}`)
-      await handler(String(job.org_id), job.payload)
-      await jobs.markSucceeded(String(job.id))
+      await handler(job.org_id, job.payload)
+      await jobs.markSucceeded(job.id)
       counts.succeeded += 1
     } catch (err) {
       // The queue is the safety net: any failure is recorded and retried.
-      const outcome = await jobs.markFailed(String(job.id), describe(err))
+      const outcome = await jobs.markFailed(job.id, describe(err))
       if (outcome === 'dead') {
         counts.dead += 1
         if (job.kind === 'ingest_document') {
-          await markDocumentFailed(String(job.org_id), String(job.payload.document_id))
+          await markDocumentFailed(job.org_id, String(job.payload.document_id))
         }
       } else {
         counts.requeued += 1

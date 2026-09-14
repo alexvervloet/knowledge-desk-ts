@@ -17,11 +17,19 @@ import * as normalize from './normalize.ts'
 
 export const MOCK_BANNER = '[MOCK] no answer-model key set; this reply is not model-generated.'
 
-/** One retrieved passage, as the retriever hands it over. */
+/**
+ * One retrieved passage, as the retriever hands it over.
+ *
+ * `path` and `text` are typed rather than left as unknown, and the coercion that
+ * makes that true happens once, in retrieval.search, where the database rows
+ * arrive. The Python side reaches for `str(c.get("text", ""))` at each of the
+ * eight places that read a passage; doing it at the boundary instead means a
+ * passage that reached this module is already a passage.
+ */
 export interface Context {
-  path?: unknown
-  text?: unknown
-  [key: string]: unknown
+  path: string
+  text: string
+  [field: string]: unknown
 }
 
 export type ProviderEvent =
@@ -211,7 +219,7 @@ function neutralize(text: string): string {
  */
 export function countDefused(contexts: Context[]): number {
   return contexts.reduce(
-    (total, c) => total + defuse(String(c.path ?? ''))[1] + defuse(String(c.text ?? ''))[1],
+    (total, c) => total + defuse(c.path)[1] + defuse(c.text)[1],
     0,
   )
 }
@@ -278,8 +286,8 @@ export function renderContext(contexts: Context[], nonce: string): string {
   return contexts
     .map(
       (c, i) =>
-        `[${i + 1}]\n${openTag}\npath: ${neutralize(String(c.path ?? ''))}\n` +
-        `${neutralize(String(c.text ?? ''))}\n${closeTag}`,
+        `[${i + 1}]\n${openTag}\npath: ${neutralize(c.path)}\n` +
+        `${neutralize(c.text)}\n${closeTag}`,
     )
     .join('\n\n')
 }
@@ -288,8 +296,8 @@ export function renderContext(contexts: Context[], nonce: string): string {
 export function untrustedFields(contexts: Context[]): Record<string, string> {
   const fields: Record<string, string> = {}
   contexts.forEach((c, i) => {
-    fields[`contexts[${i}].path`] = String(c.path ?? '')
-    fields[`contexts[${i}].text`] = String(c.text ?? '')
+    fields[`contexts[${i}].path`] = c.path
+    fields[`contexts[${i}].text`] = c.text
   })
   return fields
 }
@@ -416,12 +424,12 @@ export class MockAnswerProvider implements AnswerProvider {
 
   async *stream(question: string, contexts: Context[]): AsyncGenerator<ProviderEvent, void, undefined> {
     const first = contexts[0]
-    const cited = first ? String(first.path ?? '') : 'unknown'
+    const cited = first ? first.path : 'unknown'
     // Quote the passage the way the system prompt asks a real model to. The
     // mock exists so the keyless path exercises the real contract, and the
     // evidence span is now part of that contract: an answer shape the output
     // checks cannot verify would make them pass for the wrong reason.
-    const evidence = first ? String(first.text ?? '').split(/\s+/).filter(Boolean).slice(0, 8).join(' ') : ''
+    const evidence = first ? first.text.split(/\s+/).filter(Boolean).slice(0, 8).join(' ') : ''
     const answer =
       `${MOCK_BANNER} Based on the ${contexts.length} retrieved passage(s), ` +
       `the most relevant source is [1] (${cited}): "${evidence}".`

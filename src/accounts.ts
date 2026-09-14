@@ -44,7 +44,7 @@ export async function createOrgWithOwner(
       return {
         userId: String(user.id),
         orgId: String(org.id),
-        role: 'owner',
+        role: 'owner' as const,
         email: normalized,
       }
     })
@@ -132,21 +132,22 @@ export async function authenticate(
     return { user: found, memberships: rows }
   })
 
-  if (memberships.length === 0) throw new AuthError('user has no org memberships')
-  let chosen: { org_id: string; role: string; slug: string } | undefined
+  const [only] = memberships
+  if (only === undefined) throw new AuthError('user has no org memberships')
+  let chosen
   if (orgSlug !== undefined && orgSlug !== null) {
     chosen = memberships.find((m) => m.slug === orgSlug)
     if (chosen === undefined) throw new AuthError(`not a member of org: ${orgSlug}`)
   } else if (memberships.length === 1) {
-    chosen = memberships[0]
+    chosen = only
   } else {
     throw new AuthError('multiple orgs; specify org_slug')
   }
 
   return {
-    userId: String(user.id),
-    orgId: String(chosen!.org_id),
-    role: chosen!.role,
+    userId: user.id,
+    orgId: chosen.org_id,
+    role: chosen.role,
     email: normalized,
   }
 }
@@ -185,8 +186,8 @@ export async function resolveSession(rawToken: string): Promise<AuthContext | nu
   if (row === null) return null
   if (row.expires_at.getTime() <= Date.now()) return null
   return {
-    userId: String(row.user_id),
-    orgId: String(row.org_id),
+    userId: row.user_id,
+    orgId: row.org_id,
     role: row.role,
     email: row.email,
   }
@@ -298,7 +299,7 @@ export async function deleteOrg(orgId: string): Promise<void> {
     await conn.exec('delete from orgs where id = $1', [orgId])
     await purgeStrandedUsers(
       conn,
-      rows.map((r) => String(r.user_id)),
+      rows.map((r) => r.user_id),
     )
   })
 }
