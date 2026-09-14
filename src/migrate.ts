@@ -6,13 +6,35 @@
  *     npm run migrate -- --status # list applied vs pending
  */
 
-import { readFileSync, readdirSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { basename, dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import pg from 'pg'
 import { settings } from './config.ts'
 
-const MIGRATIONS_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'migrations')
+/**
+ * Find the migrations directory by walking up from this module.
+ *
+ * A fixed `../migrations` is right when node runs the sources directly
+ * (`src/migrate.ts` → `migrations/`) and wrong once tsc has emitted to
+ * `dist/src/migrate.js`, where it points at `dist/migrations`. The failure is at
+ * least loud — ENOENT on startup — but it is the container's first action, so it
+ * is worth not having. Walking up finds the directory under either layout, and
+ * under any future one.
+ */
+function findMigrationsDir(): string {
+  let dir = dirname(fileURLToPath(import.meta.url))
+  for (let up = 0; up < 5; up++) {
+    const candidate = join(dir, 'migrations')
+    if (existsSync(candidate)) return candidate
+    const parent = dirname(dir)
+    if (parent === dir) break
+    dir = parent
+  }
+  throw new Error('could not find a migrations directory above ' + fileURLToPath(import.meta.url))
+}
+
+const MIGRATIONS_DIR = findMigrationsDir()
 
 /** A Postgres identifier, quoted. Identifiers cannot be parameterized. */
 function quoteIdent(name: string): string {

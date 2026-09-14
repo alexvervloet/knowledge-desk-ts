@@ -13,7 +13,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "oxlint --type-aware src evals",
     "dev": "node --watch --experimental-strip-types src/server.ts",
-    "start": "node dist/server.js",
+    "start": "node dist/src/server.js",
     "worker": "node --experimental-strip-types src/worker.ts",
     "migrate": "node --experimental-strip-types src/migrate.ts",
     "seed": "node --experimental-strip-types src/seed.ts",

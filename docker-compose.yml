@@ -35,7 +35,7 @@ services:
   # schema and app role already exist before it claims jobs.
   worker:
     build: .
-    command: ["node", "dist/worker.js"]
+    command: ["node", "dist/src/worker.js"]
     environment:
       DATABASE_URL: postgresql://kd:kd@db:5432/knowledge_desk
       APP_DATABASE_URL: postgresql://kd_app:kd_app@db:5432/knowledge_desk
