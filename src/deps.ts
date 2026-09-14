@@ -54,15 +54,26 @@ export function clientKey(request: FastifyRequest): string {
  * Without this, `/auth/login` takes password guesses as fast as they arrive, and
  * each one costs a bcrypt verification, so the same requests are both a
  * brute-force channel and a way to spend someone else's CPU.
+ *
+ * Async, and that is not a style choice. Fastify decides how to run a hook from
+ * its arity: three parameters means callback style and the hook must call `done`,
+ * fewer means promise style and Fastify awaits what comes back. A synchronous
+ * two-parameter hook returns undefined, so Fastify has neither a promise to await
+ * nor a `done` to wait for, and the request hangs until the client gives up. It
+ * hangs on success, too, which is the part that makes it hard to spot: every
+ * request to a throttled route stops dead, not just a throttled one.
  */
-export function authRateLimit(request: FastifyRequest, reply: FastifyReply): void {
+export async function authRateLimit(
+  request: FastifyRequest,
+  reply: FastifyReply,
+): Promise<void> {
   const [allowed, retryAfter] = authLimiter.check(
     clientKey(request),
     settings.authRateBurst,
     settings.authRatePerMin,
   )
   if (!allowed) {
-    void reply
+    await reply
       .code(429)
       .header('Retry-After', String(Math.floor(retryAfter) + 1))
       .send({ detail: 'too many attempts' })
