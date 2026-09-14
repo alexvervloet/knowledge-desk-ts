@@ -1,0 +1,49 @@
+services:
+  db:
+    image: pgvector/pgvector:pg17
+    container_name: knowledge-desk-ts-pg
+    environment:
+      POSTGRES_USER: kd
+      POSTGRES_PASSWORD: kd
+      POSTGRES_DB: knowledge_desk
+    ports:
+      # The Python repo holds 5436 and both should be runnable at once, so this
+      # one takes 5437.
+      - "5437:5432"
+    volumes:
+      - kdts_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kd -d knowledge_desk"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+  # API + built UI. Runs migrations on start (creates the app role and RLS).
+  api:
+    build: .
+    environment:
+      RUN_MIGRATIONS: "1"
+      DATABASE_URL: postgresql://kd:kd@db:5432/knowledge_desk
+      APP_DATABASE_URL: postgresql://kd_app:kd_app@db:5432/knowledge_desk
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # Background embedder. Same image, different command; waits for the API so the
+  # schema and app role already exist before it claims jobs.
+  worker:
+    build: .
+    command: ["node", "dist/worker.js"]
+    environment:
+      DATABASE_URL: postgresql://kd:kd@db:5432/knowledge_desk
+      APP_DATABASE_URL: postgresql://kd_app:kd_app@db:5432/knowledge_desk
+    healthcheck:
+      disable: true # inherits the API image's HTTP check, which the worker does not serve
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  kdts_pgdata:
