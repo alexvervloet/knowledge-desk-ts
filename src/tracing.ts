@@ -36,7 +36,29 @@ import * as pii from './pii.ts'
 
 let enabled = false
 let flush: (() => Promise<void>) | null = null
-let startObservation: typeof import('@langfuse/tracing').startObservation | null = null
+
+/**
+ * How a root observation gets made. Written by `init` on success, and by tests.
+ *
+ * The seam is explicit because there is no other way to get one. Python's tests
+ * monkeypatch the module's `_client`; a `let` binding in an ES module cannot be
+ * reached from outside, so the module has to offer the door rather than have one
+ * picked. Narrow on purpose: a test can stand in for the SDK's entry point and
+ * nothing else, and every span the tracer opens still goes through the same code
+ * the real SDK does.
+ */
+type StartObservation = (name: string, attributes?: Record<string, unknown>) => LangfuseSpan
+
+let startObservation: StartObservation | null = null
+
+/**
+ * Install a stand-in for the SDK's root-span factory. Exported for tests; `init`
+ * is what calls it in a running process. Passing null turns tracing back off.
+ */
+export function setStartObservation(fn: StartObservation | null): void {
+  startObservation = fn
+  enabled = fn !== null
+}
 
 /**
  * Stand up the tracer if keys are configured. Safe to call more than once.
@@ -78,8 +100,7 @@ export function init(): void {
       flush = async () => {
         await processor.forceFlush()
       }
-      startObservation = tracing.startObservation
-      enabled = true
+      setStartObservation(tracing.startObservation as unknown as StartObservation)
       console.info('langfuse: tracing enabled')
     } catch (err) {
       console.error('langfuse: init failed, tracing disabled', err)
