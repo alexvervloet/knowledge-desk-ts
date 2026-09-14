@@ -9,6 +9,7 @@ import { connect } from '../src/db.ts'
 import { runPending } from '../src/ingest.ts'
 import * as providers from '../src/providers.ts'
 import { MOCK_BANNER, type Context, type ProviderEvent } from '../src/providers.ts'
+import type { InjectPayload } from 'light-my-request'
 import { auth, body, signup as signupOrg, sseEvents, useApp, useCleanDb } from './helpers.ts'
 
 const app = useApp()
@@ -134,7 +135,7 @@ describe('refusal', () => {
 // --- validation and recording ---------------------------------------------
 
 describe('validation and recording', () => {
-  const post = (token: string, payload: unknown) =>
+  const post = (token: string, payload: InjectPayload) =>
     app().inject({ method: 'POST', url: '/ask', headers: auth(token), payload })
 
   it('rejects empty and overlong questions with 422', async () => {
@@ -201,7 +202,7 @@ it('does not leak internals to the caller when the provider fails', async () => 
 // --- feedback -------------------------------------------------------------
 
 describe('feedback', () => {
-  const leave = (token: string, payload: unknown) =>
+  const leave = (token: string, payload: InjectPayload) =>
     app().inject({ method: 'POST', url: '/feedback', headers: auth(token), payload })
 
   it('records once per user', async () => {

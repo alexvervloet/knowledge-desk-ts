@@ -52,7 +52,7 @@ export interface AnswerProvider {
 // numbers feed `finalizeAnswer`, which is what the per-org rolling budget and
 // the platform daily cap are summed from. A wrong rate here silently resizes
 // every customer's budget.
-const PRICING: Record<string, [input: number, output: number]> = {
+export const PRICING: Record<string, [input: number, output: number]> = {
   'claude-opus-5': [5.0, 25.0],
   'claude-opus-4-8': [5.0, 25.0],
   'claude-sonnet-5': [2.0, 10.0],
@@ -62,7 +62,7 @@ const PRICING: Record<string, [input: number, output: number]> = {
 // Which models accept `output_config.effort`. Haiku 4.5 rejects it outright
 // with a 400, so sending it unconditionally makes `answerModel` configurable
 // in name only: set it to Haiku and every answer fails.
-const SUPPORTS_EFFORT: Record<string, boolean> = {
+export const SUPPORTS_EFFORT: Record<string, boolean> = {
   'claude-opus-5': true,
   'claude-opus-4-8': true,
   'claude-sonnet-5': true,
@@ -72,7 +72,7 @@ const SUPPORTS_EFFORT: Record<string, boolean> = {
 // What an unpriced model is charged at. The most expensive rate we know, so an
 // unlisted model over-counts against a budget rather than under-counting: a
 // customer stopped early can ask, while one who overspent has already spent it.
-const UNPRICED: [number, number] = Object.values(PRICING).reduce((dearest, rates) =>
+export const UNPRICED: [number, number] = Object.values(PRICING).reduce((dearest, rates) =>
   rates[0] > dearest[0] || (rates[0] === dearest[0] && rates[1] > dearest[1]) ? rates : dearest,
 )
 
