@@ -195,7 +195,24 @@ export function registerErrorHandlers(app: FastifyInstance): void {
     await reply.code(500).send({ detail: 'internal server error' })
   })
 
-  app.setNotFoundHandler(async (_request, reply) => {
-    await reply.code(404).send({ detail: 'not found' })
+}
+
+/**
+ * The 404 handler, registered once.
+ *
+ * Fastify allows exactly one per prefix, so this cannot live next to the error
+ * handler: when SERVE_STATIC is on, the SPA needs the fallback and a second
+ * registration throws at boot with "Not found handler already set". The app
+ * decides whether a built frontend is there and calls this once, with or without
+ * a fallback.
+ */
+export function registerNotFound(app: FastifyInstance, spaFallback: boolean): void {
+  app.setNotFoundHandler(async (request, reply) => {
+    // An unmatched API path is still a 404; only a GET falls through to the
+    // client-side router.
+    if (spaFallback && request.method === 'GET') {
+      return reply.sendFile('index.html')
+    }
+    return reply.code(404).send({ detail: 'not found' })
   })
 }

@@ -32,6 +32,7 @@ import {
   currentScope,
   parse,
   registerErrorHandlers,
+  registerNotFound,
   requireToken,
 } from './deps.ts'
 import { bodyLimit } from './plugins/bodylimit.ts'
@@ -440,19 +441,20 @@ export async function buildApp(): Promise<FastifyInstance> {
   // Registered last so it never shadows an API route: unmatched paths fall
   // through to the built frontend. Off unless SERVE_STATIC=1 and the build
   // exists, so dev and tests do not depend on a compiled UI.
+  let spaFallback = false
   if (settings.serveStatic) {
     const built = await stat(settings.staticDir).catch(() => null)
     if (built?.isDirectory()) {
       const fastifyStatic = (await import('@fastify/static')).default
       await app.register(fastifyStatic, { root: resolve(settings.staticDir) })
-      app.setNotFoundHandler(async (request, reply) => {
-        // An unmatched API path is still a 404; anything else is a client route
-        // the SPA owns.
-        if (request.method !== 'GET') return reply.code(404).send({ detail: 'not found' })
-        return reply.sendFile('index.html')
-      })
+      spaFallback = true
+    } else {
+      console.warn(`SERVE_STATIC is set but ${settings.staticDir} is not a directory; API only`)
     }
   }
+  // Once, and last: Fastify allows exactly one 404 handler per prefix, and this
+  // is the point at which whether a built frontend exists is known.
+  registerNotFound(app, spaFallback)
 
   return app
 }
