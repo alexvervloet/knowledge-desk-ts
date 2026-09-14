@@ -66,9 +66,6 @@ export async function buildApp(): Promise<FastifyInstance> {
     // them from costing what it would cost to parse the request first.
     bodyLimit: settings.maxRequestBytes,
     logger: false,
-    // The SPA is served same-origin in production, so an unknown route should
-    // fall through to index.html rather than being rewritten.
-    ignoreTrailingSlash: false,
   })
 
   registerErrorHandlers(app)
