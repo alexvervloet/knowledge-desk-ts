@@ -1,0 +1,6 @@
+node_modules/
+dist/
+*.local
+
+# TypeScript incremental build info
+*.tsbuildinfo

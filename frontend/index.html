@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0f172a" />
+    <title>Knowledge Desk</title>
+    <meta
+      name="description"
+      content="A multi-tenant, permissions-aware knowledge assistant. Questions reach only the documents the asker is allowed to see, enforced three independent times."
+    />
+
+    <!-- Link previews. og:image must be absolute, so it names the deployment
+         rather than /social-card.png; the file itself ships in frontend/public. -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Knowledge Desk" />
+    <meta property="og:title" content="Knowledge Desk" />
+    <meta
+      property="og:description"
+      content="A multi-tenant, permissions-aware knowledge assistant. Questions reach only the documents the asker is allowed to see, enforced three independent times."
+    />
+    <meta property="og:url" content="https://knowledge-desk.fly.dev/" />
+    <meta property="og:image" content="https://knowledge-desk.fly.dev/social-card.png" />
+    <meta property="og:image:width" content="2560" />
+    <meta property="og:image:height" content="1280" />
+    <meta
+      property="og:image:alt"
+      content="Knowledge Desk: the RAG core is 126 of 3,169 lines; the other 96% is tenancy, access-controlled retrieval, quotas, audit, and eval gates."
+    />
+    <meta name="twitter:card" content="summary_large_image" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
