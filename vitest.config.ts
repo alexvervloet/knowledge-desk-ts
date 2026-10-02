@@ -15,6 +15,10 @@ export default defineConfig({
     // Ingest tests wait on a worker draining a real queue, and the real-provider
     // test makes a live API call.
     testTimeout: 30_000,
+    // Tests drain the queue by calling runPending themselves. A background drain
+    // kicked by an upload would race them for the same jobs. worker.test.ts turns
+    // it back on where the background drain is the thing under test.
+    env: { DRAIN_IN_PROCESS: '0' },
     coverage: {
       provider: 'v8',
       include: ['src/**/*.ts'],

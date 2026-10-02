@@ -209,7 +209,8 @@ export async function processIngestDocument(
   })
 }
 
-const DISPATCH: Record<string, (orgId: string, payload: Record<string, unknown>) => Promise<void>> =
+// Exported so tests can register a job kind, as the Python tests monkeypatch it.
+export const DISPATCH: Record<string, (orgId: string, payload: Record<string, unknown>) => Promise<void>> =
   {
     ingest_document: processIngestDocument,
   }

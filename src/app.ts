@@ -56,6 +56,7 @@ import {
   type TokenResponse,
 } from './schemas.ts'
 import * as tracing from './tracing.ts'
+import { kick } from './worker.ts'
 
 export const VERSION = '0.0.1'
 
@@ -278,6 +279,8 @@ export async function buildApp(): Promise<FastifyInstance> {
     const { scope } = request
     const result = await scope.syncSource(LOCAL_FOLDER_SOURCE, req.documents)
     await audit.log(scope.orgId, scope.ctx.userId, 'source.synced', { ...result })
+    // The embedding happens in a background drain in this process, not here.
+    if (result.enqueued) void kick()
     return reply.code(202).send(result)
   })
 
