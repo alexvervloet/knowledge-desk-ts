@@ -18,7 +18,8 @@ services:
       timeout: 3s
       retries: 10
 
-  # API + built UI. Runs migrations on start (creates the app role and RLS).
+  # API + built UI + the job queue drain. Runs migrations on start (creates the
+  # app role and RLS). No worker service: the API drains the queue itself.
   api:
     build: .
     environment:
@@ -29,20 +30,6 @@ services:
       - "8000:8000"
     depends_on:
       db:
-        condition: service_healthy
-
-  # Background embedder. Same image, different command; waits for the API so the
-  # schema and app role already exist before it claims jobs.
-  worker:
-    build: .
-    command: ["node", "dist/src/worker.js"]
-    environment:
-      DATABASE_URL: postgresql://kd:kd@db:5432/knowledge_desk
-      APP_DATABASE_URL: postgresql://kd_app:kd_app@db:5432/knowledge_desk
-    healthcheck:
-      disable: true # inherits the API image's HTTP check, which the worker does not serve
-    depends_on:
-      api:
         condition: service_healthy
 
 volumes:
