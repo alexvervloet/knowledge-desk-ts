@@ -95,6 +95,8 @@ export interface Settings {
   chunkSize: number
   chunkOverlap: number
   jobMaxAttempts: number
+  jobStaleAfterSeconds: number
+  drainInProcess: boolean
   answerModel: string
   answerMaxTokens: number
   retrievalK: number
@@ -121,7 +123,7 @@ function build(): SettingsData {
     appDatabaseUrl: str('APP_DATABASE_URL', 'postgresql://kd_app:kd_app@localhost:5437/knowledge_desk'),
 
     // Connection pool bounds. Keep max at or below the database's connection
-    // limit divided by the number of running processes (api plus worker).
+    // limit divided by the number of running processes.
     dbPoolMin: int('DB_POOL_MIN', 1),
     dbPoolMax: int('DB_POOL_MAX', 10),
 
@@ -148,6 +150,14 @@ function build(): SettingsData {
     chunkSize: int('CHUNK_SIZE', 1000),
     chunkOverlap: int('CHUNK_OVERLAP', 150),
     jobMaxAttempts: int('JOB_MAX_ATTEMPTS', 3),
+    // A job still `running` this long after its claim lost its process (the
+    // machine stopped mid-embed) and is handed out again. One document embeds
+    // in seconds, so ten minutes cannot catch a job that is merely slow.
+    jobStaleAfterSeconds: int('JOB_STALE_AFTER_SECONDS', 600),
+    // The server drains the queue in the background (worker.kick). The test
+    // suite turns this off and drains by calling runPending itself, so a
+    // background drain cannot take a job out from under the test asserting on it.
+    drainInProcess: bool('DRAIN_IN_PROCESS', true),
 
     // Assistant.
     //

@@ -55,6 +55,12 @@ export async function enqueue(
 /**
  * Atomically claim the oldest due job, marking it running. Concurrent workers
  * skip each other's locked rows.
+ *
+ * A `running` job whose claim is older than `jobStaleAfterSeconds` is due again.
+ * Without that, a process that dies between claim and mark leaves the job
+ * running forever and its document pending forever, and "at-least-once" would
+ * be a claim the queue does not keep. The handlers are idempotent, so running a
+ * job twice is safe. The reclaim still counts as an attempt.
  */
 export function claimOne(): Promise<Job | null> {
   return connect(null, (conn) =>
@@ -63,11 +69,39 @@ export function claimOne(): Promise<Job | null> {
         ' updated_at = now()' +
         ' where id = (' +
         '   select id from jobs' +
-        "   where status = 'queued' and run_after <= now()" +
+        "   where (status = 'queued' and run_after <= now())" +
+        "      or (status = 'running'" +
+        '          and updated_at < now() - make_interval(secs => $1))' +
         '   order by created_at for update skip locked limit 1)' +
         ' returning id, org_id, kind, payload, attempts, max_attempts',
+      [settings.jobStaleAfterSeconds],
     ),
   )
+}
+
+/**
+ * How long until `claimOne` could next hand something out: zero if a job is due
+ * now, null if no job will ever become due without a new enqueue.
+ *
+ * A queued job is due at its `run_after`; a running one is due when it would go
+ * stale, which only matters if its process died. This is what lets a drain stop
+ * instead of polling an empty table.
+ */
+export async function secondsUntilDue(): Promise<number | null> {
+  const row = await connect(null, (conn) =>
+    conn.one<{ wait: number | null }>(
+      'select extract(epoch from min(due) - now())::float8 as wait' +
+        ' from (' +
+        "   select run_after as due from jobs where status = 'queued'" +
+        '   union all' +
+        '   select updated_at + make_interval(secs => $1) from jobs' +
+        "   where status = 'running') pending",
+      [settings.jobStaleAfterSeconds],
+    ),
+  )
+  // Clamped here rather than with `greatest`, which skips nulls and would turn
+  // an empty queue into "due now".
+  return row?.wait == null ? null : Math.max(0, row.wait)
 }
 
 export async function markSucceeded(jobId: string): Promise<void> {
