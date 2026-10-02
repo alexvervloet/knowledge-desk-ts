@@ -71,10 +71,10 @@ And the properties that matter were checked by breaking them on purpose:
 Complete and verified locally. Not deployed — the Python version is the one that
 is hosted, and running two of the same app costs money to prove a point already
 made. The full stack does run in Docker (see below), and both permission
-boundaries were checked through it end to end, including the worker container
-draining the queue.
+boundaries were checked through it end to end, including an upload drained by
+the API container with no worker running.
 
-- **243 tests**, 84/72/91/86 statements/branches/functions/lines
+- **252 tests**, 86/74/92/88 statements/branches/functions/lines
 - **6 merge-gating evals**, all passing
 - **1 real-model call**, run against `claude-sonnet-5`: it answered, quoted the
   passage, and cited `[1]`
@@ -101,7 +101,7 @@ flowchart TB
 
     subgraph workers [Background]
         Q[(jobs table<br/>skip-locked, retry, dead-letter)]
-        W[Worker<br/>chunk, embed, store]
+        W[Drain, in the API process<br/>chunk, embed, store]
     end
 
     subgraph data [Postgres + pgvector]
@@ -138,7 +138,7 @@ underneath both. A bug in any one of them is not a data leak.
 
 Node 22, TypeScript under `strict` plus `noUncheckedIndexedAccess` and
 `exactOptionalPropertyTypes`, Fastify, raw SQL over node-postgres, Postgres with
-pgvector, a Postgres-backed job queue and worker, Zod at the trust boundary, React
+pgvector, a Postgres-backed job queue, Zod at the trust boundary, React
 and Vite, Voyage embeddings, Claude for answers, Langfuse for observability,
 Docker, and GitHub Actions. Runs keyless with a loud mock fallback, so it works and
 tests green with no API keys.
@@ -157,8 +157,7 @@ npm install
 npm run migrate              # creates schema, RLS, and the app role
 npm run seed                 # two demo orgs (optional; --reset rebuilds them)
 
-npm run dev                  # API on :8000
-npm run worker               # background embedder (separate shell)
+npm run dev                  # API on :8000, drains the job queue itself
 
 cd frontend && npm install && npm run dev   # UI on :5173
                                             # set VITE_API_BASE=http://localhost:8000
@@ -167,7 +166,7 @@ cd frontend && npm install && npm run dev   # UI on :5173
 Port 5437, not 5436: the Python version holds that one and both should be runnable
 at once.
 
-Or run the whole stack (API + built UI + worker + db) in containers:
+Or run the whole stack (API + built UI + db) in containers:
 
 ```bash
 docker compose up --build    # app on http://localhost:8000
