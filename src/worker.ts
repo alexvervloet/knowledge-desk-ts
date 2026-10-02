@@ -60,6 +60,11 @@ async function loop(once: boolean, onIdle?: () => void): Promise<void> {
     }
     await new Promise<void>((done) => {
       const timer = setTimeout(finish, wait * 1000)
+      // In the background, the wait must not be what keeps node alive: a stale
+      // claim means a ten-minute timer, and a script that kicked a drain would
+      // hang that long after its own work finished. The server stays up on its
+      // listener anyway. The CLI drain keeps the timer, since waiting is its job.
+      if (onIdle) timer.unref()
       function finish(): void {
         clearTimeout(timer)
         wake = null
