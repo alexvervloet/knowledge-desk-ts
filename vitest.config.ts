@@ -12,7 +12,7 @@ export default defineConfig({
     // would have them truncate each other's rows mid-test, so the suite is
     // serial. The Python side gets this for free from pytest's default.
     fileParallelism: false,
-    // Ingest tests wait on a worker draining a real queue, and the real-provider
+    // Ingest tests wait on a drain working a real queue, and the real-provider
     // test makes a live API call.
     testTimeout: 30_000,
     // Tests drain the queue by calling runPending themselves. A background drain
@@ -26,11 +26,11 @@ export default defineConfig({
       // behaviour to cover, and counting it drags the total without telling
       // anyone anything.
       exclude: ['src/seed-corpus.ts'],
-      // The measured figures are 84/72/91/86. The floors sit below them
+      // The measured figures are 86/74/92/88. The floors sit below them
       // on purpose: the gate is here to catch a real regression rather than to
       // argue about a point of drift. Raise them as the thin modules get tests —
-      // worker.ts and server.ts are at 0%, migrate.ts and tracing.ts around 64%,
-      // and all four are process wiring rather than the parts a reviewer cares
+      // server.ts is at 0%, migrate.ts and tracing.ts around 64%,
+      // and all three are process wiring rather than the parts a reviewer cares
       // about. The parts they do care about are covered: tenancy 95%, assistant
       // 100%, outputchecks 96%, ingest 96%, normalize 98%, providers 91%.
       thresholds: { lines: 82, functions: 85, branches: 68, statements: 80 },
