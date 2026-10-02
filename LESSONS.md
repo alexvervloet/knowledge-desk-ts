@@ -190,3 +190,44 @@ because the sha was still in the terminal scrollback.
 
 **Next time:** commit messages with any punctuation go through `git commit -F
 file`, and rewording is `git commit --amend`, never `rebase --onto`.
+
+## 12. A two-second poll keeps the database awake
+
+This port copied the Python worker faithfully: a separate process polling the
+jobs table every two seconds, forever. On the Python side, deployed on Fly with
+Neon, that one query was the whole database bill. Neon suspends compute after
+five quiet minutes, and the poll never allowed five. The worker's Fly process
+group sat outside `http_service`, so `auto_stop_machines` never covered it either.
+About $40 a month for a demo nobody was using.
+
+This repo isn't deployed, so it never paid. It would have, the day it was.
+
+Both sides now drain inside the server. `kick()` runs at startup and after an
+upload, the drain waits out retry backoff, and it returns when
+`secondsUntilDue()` says nothing is waiting. Verified in Docker. With the API up
+and idle, the database sees the same transaction count as with the API stopped.
+
+Node made one part simpler. Python needs a lock so "queue empty, stop" and
+"start a drain" can't interleave and lose a kick. Here the event loop does that,
+as long as the drain clears `running` in the same synchronous step that decides
+to stop. Clearing it in a `.finally()` would leave a microtask gap where a kick
+sees a drain that's already finished.
+
+It also exposed a gap the port inherited. A job whose process died between claim
+and mark stayed `running` forever. `claimOne` now treats a claim older than ten
+minutes as abandoned.
+
+**Next time:** for anything that might be deployed on scale-to-zero billing, ask
+what it queries when nobody's using it. The answer should be nothing.
+
+## 13. Prettier is not this repo's formatter
+
+Formatting new files with `npx prettier --write` reflowed seven files to
+Prettier's defaults (double quotes, semicolons), including 500 unrelated lines
+of `app.ts`. The repo has no Prettier config and no formatter at all. Its style
+is single quotes, no semicolons, by hand, checked only by `oxlint`. It was
+caught before committing and fixed by restoring the files from git and
+reapplying only the intended edits.
+
+**Next time:** look for a formatter config before running one. No config means
+there's no formatter, not "use the default".
