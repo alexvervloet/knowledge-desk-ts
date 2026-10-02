@@ -1,6 +1,6 @@
 # Multi-stage: build the SPA, compile the server, then copy both into a runtime
-# image with production dependencies only. The worker runs from this same image
-# with a different command.
+# image with production dependencies only. The server drains the job queue
+# itself, so there is no second command to run from this image.
 
 # --- stage 1: build the frontend -----------------------------------------
 FROM node:22-slim AS web
