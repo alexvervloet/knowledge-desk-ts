@@ -217,8 +217,17 @@ It also exposed a gap the port inherited. A job whose process died between claim
 and mark stayed `running` forever. `claimOne` now treats a claim older than ten
 minutes as abandoned.
 
+The first full run hung for ten minutes after every test passed. The evals
+upload through the app, so each upload kicked a background drain that raced the
+evals' own `runPending`. When one claimed a job, the other saw it `running` and
+set a timer for when the claim would go stale. That timer held node open. The
+evals now turn the drain off, as the tests do, and a background drain's timer is
+`unref()`'d so it can never be the thing keeping a process alive.
+
 **Next time:** for anything that might be deployed on scale-to-zero billing, ask
-what it queries when nobody's using it. The answer should be nothing.
+what it queries when nobody's using it. The answer should be nothing. And any
+new kick site needs the same question the tests answered: does something else
+already drain here?
 
 ## 13. Prettier is not this repo's formatter
 
