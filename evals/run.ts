@@ -46,6 +46,11 @@ interface Source {
   path: string
 }
 
+// Every eval drains the queue itself with runPending. A background drain kicked
+// by an upload would race it for the same jobs, the same reason the tests turn
+// it off. It also left a retry timer that held the process open for ten minutes.
+settings.drainInProcess = false
+
 let app: FastifyInstance | null = null
 
 /** The app, built once. Every eval drives the same instance. */
